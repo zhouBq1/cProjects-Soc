@@ -1,0 +1,53 @@
+# depslib dependency file v1.0
+1513232267 source:/home/zhoubao/codeBlockProjects/socketProject/main.c
+	"src/SocketClient.h"
+	"src/SocketServer.h"
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<pthread.h>
+	"src/CommonTypes.h"
+	"src/ThreadPool.h"
+	<time.h>
+
+1513231589 source:/home/zhoubao/codeBlockProjects/socketProject/src/SocketClient.c
+	"SocketClient.h"
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<arpa/inet.h>
+	<sys/types.h>
+	<sys/socket.h>
+	<unistd.h>
+	<errno.h>
+	<pthread.h>
+
+1513232631 /home/zhoubao/codeBlockProjects/socketProject/src/SocketClient.h
+
+1512809732 source:/home/zhoubao/codeBlockProjects/socketProject/src/SocketServer.c
+	"SocketServer.h"
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<arpa/inet.h>
+	<sys/types.h>
+	<sys/socket.h>
+	<unistd.h>
+	<errno.h>
+	<pthread.h>
+
+1513232624 /home/zhoubao/codeBlockProjects/socketProject/src/SocketServer.h
+
+1513058117 /home/zhoubao/codeBlockProjects/socketProject/src/CommonTypes.h
+
+1513145938 /home/zhoubao/codeBlockProjects/socketProject/src/ThreadPool.h
+	<stdlib.h>
+	<stdio.h>
+	<string.h>
+	<pthread.h>
+	<errno.h>
+	"CommonTypes.h"
+
+1513148859 source:/home/zhoubao/codeBlockProjects/socketProject/src/ThreadPool.c
+	"ThreadPool.h"
+

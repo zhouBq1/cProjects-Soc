@@ -1,0 +1,6 @@
+#ifndef SOCKETSERVER_H_INCLUDED
+#define SOCKETSERVER_H_INCLUDED
+
+int startServer();
+
+#endif // SOCKETSERVER_H_INCLUDED

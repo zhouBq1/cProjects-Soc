@@ -1,0 +1,6 @@
+#ifndef SOCKETCLIENT_H_INCLUDED
+#define SOCKETCLIENT_H_INCLUDED
+
+int startClient();
+
+#endif // SOCKETCLIENT_H_INCLUDED
