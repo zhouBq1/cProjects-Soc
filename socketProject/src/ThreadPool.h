@@ -8,21 +8,24 @@
 #include <errno.h>
 #include "CommonTypes.h"
 
-typedef struct _taskStatus{
+typedef struct _taskStatus
+{
     kTaskStatusReady ,
     kTaskStatusDoing ,
     kTaskStatusAbort ,
     kTaskStatusFinished
-}taskStatus;
+} taskStatus;
 
-struct task{
+struct task
+{
     void *(*task)(void *args); //pointer function
     taskStatus status;
     void *arg; //arguments
     struct task*next;//task stack
 };
 
-typedef struct _thread_pool{
+typedef struct _thread_pool
+{
     pthread_mutex_t lock; //mutex lockkkk
     pthread_cond_t cond;  //conditions
     struct task*task_list; //task list

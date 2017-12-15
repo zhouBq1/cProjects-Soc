@@ -10,7 +10,8 @@
 #include <time.h>
 
 void * task_routine(void *arg);
-int main(){
+int main()
+{
     printf("run at the main func at thread :%d\n",pthread_self());
     int a =10 ,b =10;
 
@@ -37,7 +38,7 @@ int main(){
     struct tm *tmp_ptr = NULL;
 
     time(&tmpcal_ptr);
-        //tmpcal_ptr = time(NULL);   两种取值方法均可以
+    //tmpcal_ptr = time(NULL);   两种取值方法均可以
     printf("tmpcal_ptr=%d\n", tmpcal_ptr);
 
     tmp_ptr = gmtime(&tmpcal_ptr);
@@ -52,7 +53,8 @@ int main(){
     return 0;
 }
 
-void * task_routine(void *arg){
+void * task_routine(void *arg)
+{
     printf("this is in the task routine and the arg is %s\n ,thread [%u]\n" ,(char *)arg ,pthread_self());
     sleep(10);
     printf("now the task_routine has finished on thread [%u]" ,pthread_self());

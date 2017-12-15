@@ -1,4 +1,3 @@
-
 #include "ThreadPool.h"
 
 /*
@@ -6,7 +5,8 @@
 *do the jobs while unusual-existing form current thread .
 *@param arg :the arguments passed to the handler to do the cleanup jobs
 */
-void handler(void *arg){
+void handler(void *arg)
+{
     pthread_mutex_t *lock = (pthread_mutex_t *)arg;
     pthread_mutex_unlock(lock);
     printf("in the function handler\n");
@@ -24,7 +24,8 @@ void handler(void *arg){
 * thread function ,the main function that's do the real thread jobs
 *pthread_create
 */
-void* routine(void *arg){
+void* routine(void *arg)
+{
     thread_pool *pool = (thread_pool*)arg;
     struct task *p;
     printf("this is in the thread with id[%u] ,function routine\n" ,pthread_self());
@@ -76,7 +77,8 @@ void* routine(void *arg){
 *@param thraed_num :the thread_count that's created
 *@return :the pool initial results
 */
-bool pool_init(thread_pool *pool ,unsigned int threads_num){
+bool pool_init(thread_pool *pool ,unsigned int threads_num)
+{
     printf("pool[%u] init\n" ,pthread_self());
     pthread_mutex_init(&pool->lock ,NULL);
     pthread_cond_init(&pool->cond ,NULL);
@@ -88,18 +90,22 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num){
 
     pool->tids = malloc(sizeof(pthread_t) *MAX_ACTIVE_THRAED);
 
-    if(pool->task_list == NULL || pool->tids == NULL){
+    if(pool->task_list == NULL || pool->tids == NULL)
+    {
         printf("the task list or pool pids created fail");
         return false;
     }
     pool->task_list->next = NULL;
 
-    for(int index = 0 ;index < pool->active_tasks_count; index++){
-        if(pthread_create(&(pool->tids[index]),NULL ,routine,(void *)pool) != 0){
+    for(int index = 0 ; index < pool->active_tasks_count; index++)
+    {
+        if(pthread_create(&(pool->tids[index]),NULL ,routine,(void *)pool) != 0)
+        {
             printf("create thread with index :%d failed ",index);
             return false;
         }
-        else{
+        else
+        {
             printf("create thread success\n");
         }
     }
@@ -118,10 +124,12 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num){
 *@param arg :arg that's to passed to the task structure.
 *@return successfully add a new task to the pool.
 */
-bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg){
+bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg)
+{
     printf("pool[%u] add_task\n",pthread_self());
     struct task *new_task = malloc(sizeof(struct task));
-    if(new_task == NULL){
+    if(new_task == NULL)
+    {
         printf("new task allocate memory failed\n");
         return false;
     }
@@ -130,7 +138,8 @@ bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg){
     new_task->next = NULL;
 
     pthread_mutex_lock(&pool->lock);
-    if(pool->waiting_tasks_count >= MAX_ACTIVE_THRAED){
+    if(pool->waiting_tasks_count >= MAX_ACTIVE_THRAED)
+    {
         pthread_mutex_unlock(&pool->lock);
         printf("too many threads are created and waiting\n");
         free(new_task);
@@ -138,7 +147,8 @@ bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg){
     }
 
     struct task *tmp = pool->task_list;
-    while(tmp->next != NULL){
+    while(tmp->next != NULL)
+    {
         tmp = tmp->next;
     }
     tmp->next = new_task;
@@ -159,17 +169,21 @@ bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg){
 *return the new added thread-count
 */
 int pool_add_thread(thread_pool *pool ,
-                     unsigned additional_threads){
+                    unsigned additional_threads)
+{
     printf("pool[%u] add_thread\n" ,pthread_self());
-    if(additional_threads <= 0){
+    if(additional_threads <= 0)
+    {
         return 0;
     }
 
     unsigned total_threads = pool->active_tasks_count + additional_threads;
     //actual_threads is the actual threads added to the pool.
     int index ,actual_increase = 0;
-    for(index = pool->active_tasks_count;index<total_threads&&index<MAX_ACTIVE_THRAED;index++){
-        if(pthread_create(&pool->tids[index],NULL,routine,(void *)pool) != 0){
+    for(index = pool->active_tasks_count; index<total_threads&&index<MAX_ACTIVE_THRAED; index++)
+    {
+        if(pthread_create(&pool->tids[index],NULL,routine,(void *)pool) != 0)
+        {
             printf("ADD THREAD ERROR \n");
 
             if(actual_increase == 0)
@@ -190,9 +204,11 @@ int pool_add_thread(thread_pool *pool ,
 *@param removing_threads:threads count to remove
 *@return the remaining-thread count that's in the pool.
 */
-int pool_remove_thread(thread_pool *pool ,int removing_threads){
+int pool_remove_thread(thread_pool *pool ,int removing_threads)
+{
     printf("pool[%u] remove_thread\n" ,pthread_self());
-    if(removing_threads <= 0){
+    if(removing_threads <= 0)
+    {
         return 0;
     }
 
@@ -200,19 +216,23 @@ int pool_remove_thread(thread_pool *pool ,int removing_threads){
     remaining_threads = remaining_threads > 0?remaining_threads:0;
 
     int index = 0;
-    for(index = pool->active_tasks_count - 1;index > remaining_threads -1  ;index--){
+    for(index = pool->active_tasks_count - 1; index > remaining_threads -1  ; index--)
+    {
 //the pool will delete the thread with the index they are created
         errno = pthread_cancel(pool->tids[index]);
-        if(errno != 0){
+        if(errno != 0)
+        {
 //when thread cancel execute failed ,then break ,run the next stop.
             break;
         }
     }
 //didn't run the cancel option.
-    if(index == pool->active_tasks_count-1){
+    if(index == pool->active_tasks_count-1)
+    {
         return -1;
     }
-    else{
+    else
+    {
         pool->active_tasks_count+=1;
         return index+1;
     }
@@ -223,19 +243,23 @@ int pool_remove_thread(thread_pool *pool ,int removing_threads){
 *@param pool:the pool to destroy
 *@return destroy result.
 */
-bool pool_destroy(thread_pool *pool){
+bool pool_destroy(thread_pool *pool)
+{
     printf("pool[%u] destroy\n" ,pthread_self());
     pool->isShutdown = true;
 //    waken the threads that's blocked to collect the memory allocated to the threads.
     pthread_cond_broadcast(&pool->cond);
 
     int index = 0;
-    for(index = 0;index < pool->active_tasks_count;index++){
+    for(index = 0; index < pool->active_tasks_count; index++)
+    {
         errno = pthread_join(pool->tids[index] ,NULL);
-        if(errno != 0){
+        if(errno != 0)
+        {
             printf("join tids[%u] error:%s\n" ,index ,strerror(errno));
         }
-        else {
+        else
+        {
             printf("tids [%u] has joint\n" ,index);
         }
     }
