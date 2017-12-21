@@ -8,18 +8,26 @@
 #include <errno.h>
 #include "CommonTypes.h"
 
-typedef struct _taskStatus
+#define MYERROR_INFO_MAX_LENGTH 100
+typedef enum
 {
-    kTaskStatusReady ,
+    kTaskStatusReady = 0,
     kTaskStatusDoing ,
     kTaskStatusAbort ,
-    kTaskStatusFinished
+    kTaskStatusFinished ,
+    kTaskStatusAbnormal ,
 } taskStatus;
+
+typedef struct _myError{
+    char info[100] ;
+    unsigned code;
+} myError;
 
 struct task
 {
     void *(*task)(void *args); //pointer function
     taskStatus status;
+    pthread_key_t key;
     void *arg; //arguments
     struct task*next;//task stack
 };
@@ -38,7 +46,7 @@ typedef struct _thread_pool
 } thread_pool;
 
 bool pool_init(thread_pool *pool ,unsigned int threads_num);
-bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg);
+//bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg);
 /**
  add a tesk to the thread
 
@@ -48,7 +56,7 @@ bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg);
  @param key the key set for the task
  @return successfully add the task to the thread_pool
  */
-bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg,pthread_key_t *key);
+bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg,pthread_key_t key);
 int pool_add_thread(thread_pool *pool ,unsigned additional_threads);
 int pool_remove_thread(thread_pool *pool ,int removing_threads);
 bool pool_destroy(thread_pool *pool);
@@ -59,6 +67,14 @@ bool pool_destroy(thread_pool *pool);
  @param key the pthread_key_t type of key to identifier
  @return successfully abort the task or not
  */
-bool pool_abort_task(pthread_key_t *key);
+bool pool_abort_task(pthread_key_t key ,thread_pool *pool);
+
+/**
+ get the task status of the task with the identifier of key in the thread
+
+ @param key the identifier set for the task of the thread
+ @return the task status now of the thread in the thread-pool
+ */
+taskStatus pool_get_task_status(pthread_key_t key ,thread_pool *pool);
 
 #endif // THREADPOOL_H_INCLUDED

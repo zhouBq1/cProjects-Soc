@@ -9,12 +9,11 @@
 
 #include <time.h>
 
+
+
 void * task_routine(void *arg);
 int main()
 {
-    printf("run at the main func at thread :%d\n",pthread_self());
-    int a =10 ,b =10;
-
     /************/
     /****socket client and server***/
     /************/
@@ -26,37 +25,29 @@ int main()
     /************/
     /****thread operations***/
     /************/
-//    thread_pool*threadPool=malloc(sizeof(thread_pool));
-//    pool_init(threadPool ,4);
-//    pool_add_task(threadPool ,&task_routine,"thisIsAParameter");
-//    sleep(20);
-
-    /************/
-    /****time operations***/
-    /************/
-    time_t tmpcal_ptr;
-    struct tm *tmp_ptr = NULL;
-
-    time(&tmpcal_ptr);
-    //tmpcal_ptr = time(NULL);   两种取值方法均可以
-    printf("tmpcal_ptr=%d\n", tmpcal_ptr);
-
-    tmp_ptr = gmtime(&tmpcal_ptr);
-    printf("after gmtime, the time is:%d:%d:%d\n", tmp_ptr->tm_hour, tmp_ptr->tm_min, tmp_ptr->tm_sec);
-
-    tmp_ptr = localtime(&tmpcal_ptr);
-    printf ("after localtime, the time is:%d.%d.%d ", (1900+tmp_ptr->tm_year), (1+tmp_ptr->tm_mon), tmp_ptr->tm_mday);
-    printf("%d:%d:%d\n", tmp_ptr->tm_hour, tmp_ptr->tm_min, tmp_ptr->tm_sec);
-
-    return 0;
+    thread_pool*threadPool=malloc(sizeof(thread_pool));
+    pool_init(threadPool ,4);
+    pthread_key_t key;
+    pthread_key_create(&key ,NULL);
+    pool_add_task(threadPool ,&task_routine,"thisIsAParameter" ,key);
+    sleep(6);
+    taskStatus status = pool_get_task_status(key ,threadPool);
+    u_print("now the task status is %d (1)\n" ,status);
+    sleep(10);
+    pool_abort_task(key ,threadPool);
+    status = pool_get_task_status(key ,threadPool);
+    u_print("now the task status is %d (2)\n" ,status);
 
     return 0;
 }
 
+    /************/
+    /**** log testing ***/
+    /************/
 void * task_routine(void *arg)
 {
     printf("this is in the task routine and the arg is %s\n ,thread [%u]\n" ,(char *)arg ,pthread_self());
-    sleep(10);
-    printf("now the task_routine has finished on thread [%u]" ,pthread_self());
+    sleep(5);
+    printf("now the task_routine has finished on thread [%u]\n" ,pthread_self());
     return NULL;
 }

@@ -1,4 +1,7 @@
 #include "ThreadPool.h"
+#include <string.h>
+
+static struct task* taskIsValidForKey(pthread_key_t key ,thread_pool *pool ,myError *err);
 
 /*
 *clean-up handler
@@ -12,6 +15,11 @@ void handler(void *arg)
     printf("in the function handler\n");
 }
 
+void* key_destroy_default(void *arg){
+    pthread_key_t argKey = (pthread_key_t)arg;
+    printf("the key is destroy with arg :%d" ,argKey);
+    return NULL;
+}
 /*
 *thread_routine -> while creating a new thread ,the routine will run to make ready of the resources for this thread.
 *@param arg: the pool arguments passed to
@@ -34,6 +42,7 @@ void* routine(void *arg)
         //(head->next)
         pthread_cleanup_push(handler,(void *)&pool->lock);
         pthread_mutex_lock(&pool->lock);
+
 // to judge the node existing in the thread ,and with no node working the thread will block.
 
         while(pool->waiting_tasks_count == 0 && !pool->isShutdown)          //do the running-loop tog
@@ -46,22 +55,34 @@ void* routine(void *arg)
             pthread_mutex_unlock(&pool->lock);
             pthread_exit(NULL);
         }
+
         p =pool->task_list->next;
         pool->task_list->next =p->next;
         pool->waiting_tasks_count--;
+        while(p != NULL && p->status == kTaskStatusAbort){
+            p =pool->task_list->next;
+            pool->task_list->next =p->next;
+            pool->waiting_tasks_count--;
+        }
 
         //解锁
         pthread_mutex_unlock(&pool->lock);
         pthread_cleanup_pop(0);
 
-
         //处理刚才扣下来的那个节点任务
+//      the thread in which the task runs won't be canceled.
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,NULL);       //禁止当前这个线程被其他线程调用pthread_cancel来删除
+        printf("1key [%d] in the thread[%d] at status[%d] \n" ,p->key ,pthread_self() ,p->status);
+        p->status = kTaskStatusDoing;
+        printf("2key [%d] in the thread[%d] at status[%d] \n" ,p->key ,pthread_self() ,p->status);
+        pthread_setspecific(p->key ,pthread_self());
         (p->task)(p->arg);                                       //执行任务
+        p->status = kTaskStatusFinished;
+        printf("3key [%d] in the thread[%d] at status[%d] \n" ,p->key ,pthread_self() ,p->status);
+        pthread_key_delete(p->key);
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,NULL);        //取消禁止删除效果
         //释放定义的那个节点
         free(p);
-
     }
     pthread_exit(NULL);//退出
 }
@@ -96,6 +117,7 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num)
         return false;
     }
     pool->task_list->next = NULL;
+    pool->task_list->key = -1;//pthread_key_t will start count at 0 ,so -1 as the default key.
 
     for(int index = 0 ; index < pool->active_tasks_count; index++)
     {
@@ -106,7 +128,7 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num)
         }
         else
         {
-            printf("create thread success\n");
+            printf("create thread success -> tid[%d]\n" ,pool->tids[index]);
         }
     }
     return true;
@@ -124,7 +146,7 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num)
 *@param arg :arg that's to passed to the task structure.
 *@return successfully add a new task to the pool.
 */
-bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg)
+static bool _pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg)
 {
     printf("pool[%u] add_task\n",pthread_self());
     struct task *new_task = malloc(sizeof(struct task));
@@ -154,10 +176,116 @@ bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg)
     tmp->next = new_task;
     pool->waiting_tasks_count ++;
     pthread_mutex_unlock(&pool->lock);
-    pthread_key_create();
     //waken a new blocked thread and continue. this is the same as the semphore of objective-c ,resources will be blocked at a place until get a signal ,and unblock part of resources
     pthread_cond_signal(&pool->cond);
     return true;
+}
+
+/*
+*add a new task to the pool ,the task passed is a fun that's to be added as a task structure's task
+*1. create a new task node ,and set the next to null
+*2. pass the pointer-function and the argument to the new task node.
+*3. lock the mutex while sharing the resource (the operations for the pool ,consisting of counting ,list-operations)
+*4. add the new-task to the pool's task-list ,and tasks-waiting-count +1.
+*5. unlock the mutex.
+*@param pool :the pool to add the task to
+*@param task :the task that's really doing the work
+*@param arg :arg that's to passed to the task structure.
+*@return successfully add a new task to the pool.
+*/
+bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg ,pthread_key_t key)
+{
+    printf("pool[%u] add_task\n",pthread_self());
+    struct task *new_task = malloc(sizeof(struct task));
+    if(new_task == NULL)
+    {
+        printf("new task allocate memory failed\n");
+        return false;
+    }
+    new_task->task = task;
+    new_task->arg = arg;
+    new_task->next = NULL;
+    new_task->key = key;
+    new_task->status = kTaskStatusReady;
+
+    pthread_mutex_lock(&pool->lock);
+    if(pool->waiting_tasks_count >= MAX_ACTIVE_THRAED)
+    {
+        pthread_mutex_unlock(&pool->lock);
+        printf("too many threads are created and waiting\n");
+        free(new_task);
+        return false;
+    }
+
+    struct task *tmp = pool->task_list;
+    while(tmp->next != NULL)
+    {
+        tmp = tmp->next;
+    }
+    tmp->next = new_task;
+    pool->waiting_tasks_count ++;
+    pthread_mutex_unlock(&pool->lock);
+    //waken a new blocked thread and continue. this is the same as the semphore of objective-c ,resources will be blocked at a place until get a signal ,and unblock part of resources
+    pthread_cond_signal(&pool->cond);
+    return true;
+}
+
+taskStatus pool_get_task_status(pthread_key_t key ,thread_pool *pool){
+    struct task *task;
+    myError *err;
+    task = taskIsValidForKey(key ,pool ,err);
+    if(err != NULL && task == NULL){
+        printf("=====%s" ,err->info);
+        return kTaskStatusAbnormal;
+    }
+    return task->status;
+}
+
+bool pool_abort_task(pthread_key_t key ,thread_pool *pool){
+    struct task *task;
+    myError *err;
+    task = taskIsValidForKey(key ,pool ,err);
+    if(err != NULL || task == NULL){
+        return false;
+    }
+    if(err != NULL && task == NULL){
+        printf("%s" ,err->info);
+        return false;
+    }
+    task->status = kTaskStatusAbort;
+    return true;
+}
+
+static struct task* taskIsValidForKey(pthread_key_t key ,thread_pool *pool ,myError *err){
+    /**< search from the thread_pool ,while task_list->key is equal to the key passed ,return the task and judge the task status .
+        while the task is running ,cannot stop the task ,in the task-list (mean that the task is to do sometime ,and can be aborted)
+        do the aborting ,and remove the task.
+     */
+    err = malloc(sizeof(myError));
+    struct task *task = NULL;
+    struct task*tmptask = pool->task_list;
+    while(tmptask ->next!= NULL && tmptask->key != key){
+        tmptask = tmptask->next;
+    }
+    printf("tmptask->key is %d ,and the search key is %d\n" ,tmptask->key ,key);
+    if(tmptask->key == key){
+        task = tmptask;
+    }
+
+
+    if(task == NULL){
+        strcpy(err->info ,"key is not set ,set the key\n");
+        return NULL;
+    }
+    pthread_t taskThread = pthread_getspecific(key);
+    /**< the task is running on the thread */
+    if(taskThread != 0 && task->status == kTaskStatusDoing){
+        printf("the task for the key[%d] dose not exist in the thread[%d]\n" ,key ,taskThread);
+    }
+
+    free(err);
+    err = NULL;
+    return task;
 }
 
 /*

@@ -41,6 +41,7 @@
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="src/CommonTypes.h" />
 		<Unit filename="src/SocketClient.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -49,6 +50,11 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/SocketServer.h" />
+		<Unit filename="src/ThreadPool.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/ThreadPool.h" />
+		<Unit filename="src/ToolDefines.h" />
 		<Extensions>
 			<code_completion />
 			<debugger />
