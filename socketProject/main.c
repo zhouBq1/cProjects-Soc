@@ -15,7 +15,7 @@ void * task_routine(void *arg);
 int main()
 {
     /************/
-    /****socket client and server***/
+    /****socket client and servers***/
     /************/
 //a= startServer();
 //printf("server result is %d",a);
