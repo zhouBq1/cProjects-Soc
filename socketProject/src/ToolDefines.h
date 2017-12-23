@@ -1,3 +1,4 @@
+
 #ifndef TOOLDEFINES_H_INCLUDED
 #define TOOLDEFINES_H_INCLUDED
 #include <string.h>
@@ -27,7 +28,14 @@ static char *get_file_name(file){
 }
 
 static char *get_current_date(){
+
     char *rstDate = malloc(sizeof(char) * 20);
+//    time_t timep;
+//    struct tm *p;
+//    time(&timep);
+//    p =localltime(&timep);
+//    sprintf(rstDate ,"%d/%d/%d %d:%d:%d",p->tm_mon ,p->tm_mday ,p->tm_year+1900 ,p->tm_hour ,p->tm_min ,p->tm_sec);
+
     sprintf(rstDate ,"%s-%s",__DATE__,__TIME__);
     return rstDate;
 }

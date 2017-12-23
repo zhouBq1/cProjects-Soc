@@ -1,7 +1,12 @@
 #include "ThreadPool.h"
+#include "ThreadPoolPrivate.h"
 #include <string.h>
 
-static struct task* taskIsValidForKey(pthread_key_t key ,thread_pool *pool ,myError *err);
+/*
+    use the thread_pool as a file_private variety ,and you will not use it outside the file through api provided,
+*/
+static thread_pool *pool;
+static struct task* taskIsValidForKey(pthread_key_t key ,myError *err);
 
 /*
 *clean-up handler
@@ -55,11 +60,10 @@ void* routine(void *arg)
             pthread_mutex_unlock(&pool->lock);
             pthread_exit(NULL);
         }
-
         p =pool->task_list->next;
         pool->task_list->next =p->next;
         pool->waiting_tasks_count--;
-        while(p != NULL && p->status == kTaskStatusAbort){
+        while(p != NULL && p->status == kTaskStatusAborted){
             p =pool->task_list->next;
             pool->task_list->next =p->next;
             pool->waiting_tasks_count--;
@@ -74,7 +78,12 @@ void* routine(void *arg)
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,NULL);       //禁止当前这个线程被其他线程调用pthread_cancel来删除
         printf("1key [%d] in the thread[%d] at status[%d] \n" ,p->key ,pthread_self() ,p->status);
         p->status = kTaskStatusDoing;
+        struct task**tasks = pool->tasks_at_work->content;
+        tasks[pool->tasks_at_work->length] = p;
+        pool->tasks_at_work->length += 1;
+
         printf("2key [%d] in the thread[%d] at status[%d] \n" ,p->key ,pthread_self() ,p->status);
+        //anything you want to pass to the key for serialization ,the value will be bind to the thread and you can get the value from the thread
         pthread_setspecific(p->key ,pthread_self());
         (p->task)(p->arg);                                       //执行任务
         p->status = kTaskStatusFinished;
@@ -98,8 +107,13 @@ void* routine(void *arg)
 *@param thraed_num :the thread_count that's created
 *@return :the pool initial results
 */
-bool pool_init(thread_pool *pool ,unsigned int threads_num)
+bool pool_init(unsigned int threads_num)
 {
+    if(pool != NULL){
+        pool_destroy();
+    }
+
+    pool = malloc(sizeof(thread_pool));
     printf("pool[%u] init\n" ,pthread_self());
     pthread_mutex_init(&pool->lock ,NULL);
     pthread_cond_init(&pool->cond ,NULL);
@@ -108,6 +122,8 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num)
     pool->waiting_tasks_count = 0;
     pool->active_tasks_count = threads_num;
     pool->isShutdown = false;
+    pool->tasks_at_work = malloc(sizeof(Array));
+    pool->tasks_at_work->content = malloc(sizeof(struct task *) *MAX_ACTIVE_THRAED);
 
     pool->tids = malloc(sizeof(pthread_t) *MAX_ACTIVE_THRAED);
 
@@ -117,7 +133,7 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num)
         return false;
     }
     pool->task_list->next = NULL;
-    pool->task_list->key = -1;//pthread_key_t will start count at 0 ,so -1 as the default key.
+    pool->task_list->key = RELOLVED_PTHREAD_KEY;//pthread_key_t will start count at 0 ,so -1 as the default key.
 
     for(int index = 0 ; index < pool->active_tasks_count; index++)
     {
@@ -146,7 +162,7 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num)
 *@param arg :arg that's to passed to the task structure.
 *@return successfully add a new task to the pool.
 */
-static bool _pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg)
+static bool _pool_add_task( void *(*task)(void *arg),void *arg)
 {
     printf("pool[%u] add_task\n",pthread_self());
     struct task *new_task = malloc(sizeof(struct task));
@@ -193,7 +209,7 @@ static bool _pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *ar
 *@param arg :arg that's to passed to the task structure.
 *@return successfully add a new task to the pool.
 */
-bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg ,pthread_key_t key)
+bool pool_add_task( void *(*task)(void *arg),void *arg ,pthread_key_t key)
 {
     printf("pool[%u] add_task\n",pthread_self());
     struct task *new_task = malloc(sizeof(struct task));
@@ -230,60 +246,70 @@ bool pool_add_task(thread_pool* pool , void *(*task)(void *arg),void *arg ,pthre
     return true;
 }
 
-taskStatus pool_get_task_status(pthread_key_t key ,thread_pool *pool){
+taskStatus pool_get_task_status(pthread_key_t key ){
     struct task *task;
     myError *err;
-    task = taskIsValidForKey(key ,pool ,err);
+    err = malloc(sizeof(myError));
+    task = taskIsValidForKey(key ,err);
     if(err != NULL && task == NULL){
         printf("=====%s" ,err->info);
         return kTaskStatusAbnormal;
     }
+    free(err);
     return task->status;
 }
 
-bool pool_abort_task(pthread_key_t key ,thread_pool *pool){
+bool pool_abort_task(pthread_key_t key){
     struct task *task;
     myError *err;
-    task = taskIsValidForKey(key ,pool ,err);
-    if(err != NULL || task == NULL){
+    err = malloc(sizeof(myError));
+    task = taskIsValidForKey(key  ,err);
+    if( task == NULL){
         return false;
     }
     if(err != NULL && task == NULL){
         printf("%s" ,err->info);
         return false;
     }
-    task->status = kTaskStatusAbort;
+    task->status = kTaskStatusAborted;
+    free(err);
     return true;
 }
 
-static struct task* taskIsValidForKey(pthread_key_t key ,thread_pool *pool ,myError *err){
+static struct task* taskIsValidForKey(pthread_key_t key ,myError *err){
     /**< search from the thread_pool ,while task_list->key is equal to the key passed ,return the task and judge the task status .
         while the task is running ,cannot stop the task ,in the task-list (mean that the task is to do sometime ,and can be aborted)
         do the aborting ,and remove the task.
      */
-    err = malloc(sizeof(myError));
+
     struct task *task = NULL;
     struct task*tmptask = pool->task_list;
     while(tmptask ->next!= NULL && tmptask->key != key){
         tmptask = tmptask->next;
     }
-    printf("tmptask->key is %d ,and the search key is %d\n" ,tmptask->key ,key);
     if(tmptask->key == key){
         task = tmptask;
-    }
+    }else{
+        pthread_mutex_lock(&pool->lock);
+        if(pool->tasks_at_work != NULL && pool->tasks_at_work->length != 0){
 
+            for(int index = 0; index < pool->tasks_at_work->length ;index ++){
+//          the task at working ,the task can be get but not be abort.
+            struct task ** tasks = (struct task **)pool->tasks_at_work->content;
+            struct task *tTask = tasks[index];
+            if(tTask->key == key){
+                task = tTask;
+            }
+        }
+        pthread_mutex_unlock(&pool->lock);
+        }
+    }
 
     if(task == NULL){
         strcpy(err->info ,"key is not set ,set the key\n");
         return NULL;
     }
-    pthread_t taskThread = pthread_getspecific(key);
-    /**< the task is running on the thread */
-    if(taskThread != 0 && task->status == kTaskStatusDoing){
-        printf("the task for the key[%d] dose not exist in the thread[%d]\n" ,key ,taskThread);
-    }
 
-    free(err);
     err = NULL;
     return task;
 }
@@ -296,8 +322,7 @@ static struct task* taskIsValidForKey(pthread_key_t key ,thread_pool *pool ,myEr
 *@param additional_threads :new thread-count to add to the pool
 *return the new added thread-count
 */
-int pool_add_thread(thread_pool *pool ,
-                    unsigned additional_threads)
+int pool_add_thread(unsigned additional_threads)
 {
     printf("pool[%u] add_thread\n" ,pthread_self());
     if(additional_threads <= 0)
@@ -332,7 +357,7 @@ int pool_add_thread(thread_pool *pool ,
 *@param removing_threads:threads count to remove
 *@return the remaining-thread count that's in the pool.
 */
-int pool_remove_thread(thread_pool *pool ,int removing_threads)
+int pool_remove_thread(int removing_threads)
 {
     printf("pool[%u] remove_thread\n" ,pthread_self());
     if(removing_threads <= 0)
@@ -371,7 +396,7 @@ int pool_remove_thread(thread_pool *pool ,int removing_threads)
 *@param pool:the pool to destroy
 *@return destroy result.
 */
-bool pool_destroy(thread_pool *pool)
+bool pool_destroy(void)
 {
     printf("pool[%u] destroy\n" ,pthread_self());
     pool->isShutdown = true;
@@ -391,8 +416,10 @@ bool pool_destroy(thread_pool *pool)
             printf("tids [%u] has joint\n" ,index);
         }
     }
+    free(pool->tasks_at_work);
     free(pool->task_list);
     free(pool->tids);
     free(pool);
     return true;
 }
+

@@ -7,5 +7,5 @@ typedef enum
     true
 } bool;
 
-#define MAX_ACTIVE_THRAED 20
+
 #endif // COMMONTYPES_H_INCLUDED

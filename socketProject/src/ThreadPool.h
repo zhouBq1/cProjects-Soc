@@ -1,3 +1,4 @@
+
 #ifndef THREADPOOL_H_INCLUDED
 #define THREADPOOL_H_INCLUDED
 
@@ -8,44 +9,43 @@
 #include <errno.h>
 #include "CommonTypes.h"
 
+#define MAX_ACTIVE_THRAED 20
 #define MYERROR_INFO_MAX_LENGTH 100
+#define RELOLVED_PTHREAD_KEY 1000
 typedef enum
 {
     kTaskStatusReady = 0,
     kTaskStatusDoing ,
-    kTaskStatusAbort ,
+    kTaskStatusAborted ,
     kTaskStatusFinished ,
     kTaskStatusAbnormal ,
 } taskStatus;
 
-typedef struct _myError{
-    char info[100] ;
-    unsigned code;
-} myError;
+#define GET_STATUS_STRING(status) get_status_string(status)
 
-struct task
-{
-    void *(*task)(void *args); //pointer function
-    taskStatus status;
-    pthread_key_t key;
-    void *arg; //arguments
-    struct task*next;//task stack
-};
+static char * get_status_string(taskStatus status){
+    char *statusString = malloc(sizeof(char) *20);
+    switch(status){
+        case kTaskStatusReady:sprintf(statusString ,"%s" ,"taskIsReady");break;
+        case kTaskStatusDoing:sprintf(statusString ,"%s" ,"taskIsDoing");break;
+        case kTaskStatusAborted:sprintf(statusString ,"%s" ,"taskIsaborted");break;
+        case kTaskStatusFinished:sprintf(statusString ,"%s" ,"taskIsFinished");break;
+        case kTaskStatusAbnormal:sprintf(statusString ,"%s" ,"taskIsAbnormal");break;
+        default:sprintf(statusString ,"%s" ,"taskStatusNotDefined");
+        return statusString;
+    }
+    return statusString;
+}
 
-typedef struct _thread_pool
-{
-    pthread_mutex_t lock; //mutex lockkkk
-    pthread_cond_t cond;  //conditions
-    struct task*task_list; //task list
-
-    pthread_t *tids; // thread id array
-
-    unsigned waiting_tasks_count; //task_count of waiting status
-    unsigned active_tasks_count; //task_count at work
-    bool isShutdown; //thread_pool status of open
-} thread_pool;
-
-bool pool_init(thread_pool *pool ,unsigned int threads_num);
+/**
+ * @brief initialize the thread pool
+ *
+ * @param[in] pool: the pool given to initial ,wont do anything when passed null
+ * @param[in] threads_num: the max-thread-number
+ * @return 0 on success, -1 when params invalid
+ * @note use this function to do the thread pool initializing-jobs
+ */
+bool pool_init(unsigned int threads_num);
 //bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg);
 /**
  add a tesk to the thread
@@ -56,10 +56,10 @@ bool pool_init(thread_pool *pool ,unsigned int threads_num);
  @param key the key set for the task
  @return successfully add the task to the thread_pool
  */
-bool pool_add_task(thread_pool* pool , void* (*task)(void *arg),void *arg,pthread_key_t key);
-int pool_add_thread(thread_pool *pool ,unsigned additional_threads);
-int pool_remove_thread(thread_pool *pool ,int removing_threads);
-bool pool_destroy(thread_pool *pool);
+bool pool_add_task(void* (*task)(void *arg),void *arg,pthread_key_t key);
+int pool_add_thread(unsigned additional_threads);
+int pool_remove_thread(int removing_threads);
+bool pool_destroy(void);
 
 /**
  abort the task with the key of key(in the pool_add_task ,the key was set)
@@ -67,7 +67,7 @@ bool pool_destroy(thread_pool *pool);
  @param key the pthread_key_t type of key to identifier
  @return successfully abort the task or not
  */
-bool pool_abort_task(pthread_key_t key ,thread_pool *pool);
+bool pool_abort_task(pthread_key_t key);
 
 /**
  get the task status of the task with the identifier of key in the thread
@@ -75,6 +75,6 @@ bool pool_abort_task(pthread_key_t key ,thread_pool *pool);
  @param key the identifier set for the task of the thread
  @return the task status now of the thread in the thread-pool
  */
-taskStatus pool_get_task_status(pthread_key_t key ,thread_pool *pool);
+taskStatus pool_get_task_status(pthread_key_t key);
 
 #endif // THREADPOOL_H_INCLUDED

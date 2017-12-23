@@ -54,6 +54,7 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/ThreadPool.h" />
+		<Unit filename="src/ThreadPoolPrivate.h" />
 		<Unit filename="src/ToolDefines.h" />
 		<Extensions>
 			<code_completion />
